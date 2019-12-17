@@ -10,9 +10,12 @@ import MPIDs_yaml
 
 
 class TestMPIDs_yaml(unittest.TestCase):
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
         # create example_yaml.yml and save dict as self.test_yaml
-        subprocess.run("python MPIDs_yaml.py -a mp-500 -o example_yaml.yml")
+        args = ['python', 'MPIDs_yaml.py', '-a', 'mp-500', '-o',
+                'example_yaml.yml']
+        subprocess.call(args, shell=True)
         with open("example_yaml.yml", 'r') as testfile:
             self.test_yaml = yaml.safe_load(testfile)
 
@@ -83,9 +86,11 @@ class TestMPIDs_yaml(unittest.TestCase):
         copy_dict['Additional_INCAR_tags']['LDAU'] = 1
         self.assertEqual(new_dict, copy_dict)
 
-    def tearDown(self):
+    @classmethod
+    def tearDownClass(self):
         # Removes the temporary example_yaml.yml file used for testing
-        subprocess.run("rm example_yaml.yml")
+        args = ['rm', 'example_yaml.yml']
+        subprocess.call(args, shell=True)
 
 
 if __name__ == "__main__":
