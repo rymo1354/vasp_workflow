@@ -3,9 +3,13 @@
 import yaml
 import argparse
 import os
-import json
+import sys
 from pymatgen.ext.matproj import MPRester
-from config import MP_api_key
+import json
+
+config_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(config_path)
+from config import MP_api_key  # noqa: E402
 
 
 def copy_yaml(path):
@@ -66,7 +70,7 @@ def new_Dict(good_mpids, formulas, old_dict=None):
 
 
 def optional_Arguments(dictionary, incar_tags, relaxation_scheme,
-                    magnetism, convergence_scheme):
+                       magnetism, convergence_scheme):
     # way to add incar tags to new .yml file (specified by -o flag)
     # while including tags that already exist in a .yml file (-c flag)
     if 'Additional_INCAR_tags' in list(dictionary.keys()):
@@ -123,9 +127,11 @@ def main():
     parser.add_argument(
         '-m',
         '--magnetism',
-        help='Magnetic enumeration scheme to consider',
+        help='Magnetic enumeration scheme to consider: ferromagnetic sets up' +
+             ' a single ferromagnetic calculation, ferro+antiferromagnetic ' +
+             'uses Gus Harts enumlib and preserve keeps original magnetism',
         type=str,
-        choices=['ferromagnetic', 'antiferromagnetic'],
+        choices=['ferromagnetic', 'ferro+antiferromagnetic', 'preserve'],
         default='ferromagnetic',
         required=False)
     parser.add_argument(
@@ -155,16 +161,16 @@ def main():
         good_mpids, formulas = get_formulas(new_mpids)
         new_dict = new_Dict(good_mpids, formulas, copy_dict)
         full_dict = optional_Arguments(new_dict, args.incar_tags,
-                            args.relaxation_scheme,
-                            args.magnetism, args.convergence_scheme)
+                                       args.relaxation_scheme,
+                                       args.magnetism, args.convergence_scheme)
         write_yaml(full_dict, args.outfile_name)
 
     else:
         good_mpids, formulas = get_formulas(args.add_MPIDs)
         new_dict = new_Dict(good_mpids, formulas)
         full_dict = optional_Arguments(new_dict, args.incar_tags,
-                            args.relaxation_scheme,
-                            args.magnetism, args.convergence_scheme)
+                                       args.relaxation_scheme,
+                                       args.magnetism, args.convergence_scheme)
         write_yaml(full_dict, args.outfile_name)
 
 
