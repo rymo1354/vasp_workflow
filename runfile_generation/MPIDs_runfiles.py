@@ -10,10 +10,7 @@ from pymatgen.ext.matproj import MPRester
 from pymatgen.analysis.magnetism.analyzer import \
     CollinearMagneticStructureAnalyzer
 from pymatgen.io.vasp.sets import batch_write_input
-
-config_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(config_path)
-from config import MP_api_key  # noqa: E402
+from configuration.config import MP_api_key
 
 
 def load_yaml(path):
