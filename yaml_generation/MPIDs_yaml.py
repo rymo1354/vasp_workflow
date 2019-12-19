@@ -128,10 +128,10 @@ def main():
         '-m',
         '--magnetism',
         help='Magnetic enumeration scheme to consider: ferromagnetic sets up' +
-             ' a single ferromagnetic calculation, ferro+antiferromagnetic ' +
-             'uses Gus Harts enumlib and preserve keeps original magnetism',
+             ' a single ferromagnetic calculation, antiferromagnetic flips ' +
+             'ferromagnetic spins and preserve keeps original magnetism',
         type=str,
-        choices=['ferromagnetic', 'ferro+antiferromagnetic', 'preserve'],
+        choices=['ferromagnetic', 'antiferromagnetic', 'preserve'],
         default='ferromagnetic',
         required=False)
     parser.add_argument(
