@@ -9,6 +9,7 @@ import numpy as np
 from pymatgen.ext.matproj import MPRester
 from pymatgen.analysis.magnetism.analyzer import \
     CollinearMagneticStructureAnalyzer
+from pymatgen.io.vasp.sets import batch_write_input
 
 config_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(config_path)
@@ -102,6 +103,19 @@ def get_magnetic_structures(structures, magnetic_scheme, num_rand=10,
     return checked_mag_structures
 
 
+def write_vasp_input_files(structures, convergence_scheme, user_inputs,
+                           write_path):
+    package = 'pymatgen.io.vasp.sets'
+    relax_set = getattr(__import__(package, fromlist=[convergence_scheme]),
+                        convergence_scheme)
+    for structure_list in structures:
+        # input_set = relax_set(user_incar_settings=user_inputs)
+        batch_write_input(structure_list, vasp_input_set=relax_set,
+                          output_dir=write_path,
+                          make_dir_if_not_present=True,
+                          user_incar_settings=user_inputs)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -126,6 +140,11 @@ def main():
         structures = get_MP_structures(read_dict['MPIDs'])
         mag_structures = get_magnetic_structures(structures,
                                                  read_dict['Magnetism'])
+        output_write_path = os.path.join(args.output_directory_path,
+                                         read_dict['Relaxation_Scheme'])
+        write_vasp_files(mag_structures, read_dict['Convergence_Scheme'],
+                         read_dict['Additional_INCAR_tags'],
+                         output_write_path)
     else:
         print('%s is not a valid path to a .yml file' % args.read_yaml_path)
         sys.exit(1)
