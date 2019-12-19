@@ -6,6 +6,7 @@ import os
 import io
 import subprocess
 import yaml
+import numpy as np
 import MPIDs_runfiles
 
 
@@ -18,7 +19,7 @@ class TestMPIDs_runfiles(unittest.TestCase):
         yaml_gen_path = os.path.join(workflow_path, 'yaml_generation')
         MPIDs_yaml_path = os.path.join(yaml_gen_path, 'MPIDs_yaml.py')
         example_yaml_path = os.path.join(yaml_gen_path, 'example_yaml.yml')
-
+        # yaml file creation from paths specified above
         args = ['python', MPIDs_yaml_path, '-a', 'mp-500', '-o',
                 example_yaml_path]
         subprocess.call(args, shell=True)
@@ -36,6 +37,56 @@ class TestMPIDs_runfiles(unittest.TestCase):
         # make sure that structure objects are correctly loaded
         structures = MPIDs_runfiles.get_MP_structures(self.test_yaml['MPIDs'])
         self.assertEqual(structures[0].formula, self.test_yaml['Formulas'][0])
+
+    def test_random_antiferromagnetic(self):
+        # test that random antiferromagnetic works for GdAlO3
+        structures = MPIDs_runfiles.get_MP_structures(['mp-5223'])
+        ferro_structure = MPIDs_runfiles.get_magnetic_structures(
+            structures, 'ferromagnetic')[0][0]
+        num_rand = 10
+        num_tries = 100
+        antiferro_magmoms = MPIDs_runfiles.random_antiferromagnetic(
+            ferro_structure.site_properties["magmom"], [], num_rand, num_tries)
+        self.assertEqual(len(antiferro_magmoms), num_rand)
+        self.assertEqual(len(np.unique(antiferro_magmoms, axis=1)), num_rand)
+
+    def test_get_magnetic_structures(self):
+        # test the assignment of the magnetism scheme for GdAlO3
+        structures = MPIDs_runfiles.get_MP_structures(['mp-5223'])
+        ferro_structures = MPIDs_runfiles.get_magnetic_structures(
+            structures, 'ferromagnetic')
+        preserved_structures = MPIDs_runfiles.get_magnetic_structures(
+            structures, 'preserve')
+        antiferro_structures = MPIDs_runfiles.get_magnetic_structures(
+            structures, 'antiferromagnetic')
+        ferro = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.94, 7.94, 7.94, 7.94]
+        preserved = [6.932, 6.933, 6.933, 6.932, 0.0, 0.0, 0.0, 0.0,
+                     0.003, 0.002, 0.003, 0.003, 0.003, 0.002, 0.003,
+                     0.003, 0.002, 0.003, 0.003, 0.002]
+        self.assertEqual(
+            ferro, ferro_structures[0][0].site_properties["magmom"])
+        self.assertEqual(
+            preserved,
+            preserved_structures[0][0].site_properties["magmom"])
+        for i in range(len(antiferro_structures[0])):
+            self.assertNotEqual(
+                ferro, antiferro_structures[0][i].site_properties["magmom"])
+
+        # test that TaSe2 doesn't attempt antiferromagnetic ordering
+        old_stdout = sys.stdout
+        result = io.StringIO()
+        sys.stdout = result
+        nonmag_structures = MPIDs_runfiles.get_MP_structures(['mp-500'])
+        nonmag_structure = MPIDs_runfiles.get_magnetic_structures(
+            nonmag_structures, 'antiferromagnetic')
+        sys.stdout = old_stdout
+        result_string = result.getvalue()
+        self.assertEqual(
+            'Ta2 Se4 is not magnetic; ferromagnetic structure to be run',
+            result_string.strip('\n'))
+        self.assertEqual(nonmag_structure[0][0].site_properties["magmom"],
+                         [0, 0, 0, 0, 0, 0])
 
     @classmethod
     def tearDownClass(self):
