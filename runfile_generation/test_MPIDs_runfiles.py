@@ -26,6 +26,7 @@ class TestMPIDs_runfiles(unittest.TestCase):
         with open(example_yaml_path, 'r') as testfile:
             self.test_yaml = yaml.safe_load(testfile)
             self.test_yaml_path = example_yaml_path
+            print(self.test_yaml)
 
     def test_load_yaml(self):
         # assert that the yaml file created is properly loaded
@@ -87,6 +88,17 @@ class TestMPIDs_runfiles(unittest.TestCase):
             result_string.strip('\n'))
         self.assertEqual(nonmag_structure[0][0].site_properties["magmom"],
                          [0, 0, 0, 0, 0, 0])
+
+    def test_write_vasp_input_files(self):
+        structures = MPIDs_runfiles.get_MP_structures(self.test_yaml['MPIDs'])
+        ferro_structures = MPIDs_runfiles.get_magnetic_structures(
+            structures, 'ferromagnetic')
+        output_write_directory = os.path.dirname(os.path.abspath(__file__))
+        output_write_path = os.path.join(output_write_directory,
+                                         self.test_yaml['Relaxation_Scheme'])
+        MPIDs_runfiles.write_vasp_input_files(
+            ferro_structures, self.test_yaml['Convergence_Scheme'],
+            self.test_yaml['Additional_INCAR_tags'], output_write_path)
 
     @classmethod
     def tearDownClass(self):
