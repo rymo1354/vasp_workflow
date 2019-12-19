@@ -4,7 +4,11 @@ import yaml
 import argparse
 import os
 import sys
+import random
+import numpy as np
 from pymatgen.ext.matproj import MPRester
+from pymatgen.analysis.magnetism.analyzer import \
+    CollinearMagneticStructureAnalyzer
 
 config_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(config_path)
@@ -31,9 +35,71 @@ def get_MP_structures(mpid_list, mp_key=MP_api_key):
     return structures
 
 
-def get_magnetic_structures(structures):
-    # assigns magnetism to structures
-    pass
+def random_antiferromagnetic(ferro_magmom, used_enumerations,
+                             num_rand, num_tries):
+    # checks if all unique iterations complete OR too many tries achieved
+    if num_rand == 0 or num_tries == 0:
+        return used_enumerations
+    # checks if proposed enumeration is the ferromagnetic enumeration
+    dont_use = False
+    antiferro_mag_scheme = random.choices([-1, 1], k=len(ferro_magmom))
+    antiferro_mag = np.multiply(antiferro_mag_scheme, ferro_magmom)
+    if np.array_equal(antiferro_mag, np.array(ferro_magmom)):
+        dont_use = True
+    # checks if proposed scheme is an already existing antiferromagnetic scheme
+    for used_enumeration in used_enumerations:
+        if np.array_equal(antiferro_mag, used_enumeration):
+            dont_use = True
+    # if dont_use = True: tries again with num_tries - 1
+    if dont_use is True:
+        return random_antiferromagnetic(ferro_magmom, used_enumerations,
+                                        num_rand, num_tries - 1)
+    # else: appends to used_enumerations: tries again with num_rand - 1
+    else:
+        used_enumerations.append(antiferro_mag)
+        return random_antiferromagnetic(ferro_magmom, used_enumerations,
+                                        num_rand - 1, num_tries)
+
+
+def get_magnetic_structures(structures, magnetic_scheme, num_rand=10,
+                            num_tries=100):
+    # assigns magnetism to structures. returns the magnetic get_structures
+    # num_rand and num_tries only used for random antiferromagnetic assignment
+    checked_mag_structures = [[] for i in range(len(structures))]
+    for structure_idx in range(len(structures)):
+        col_obj = CollinearMagneticStructureAnalyzer(
+            structures[structure_idx], overwrite_magmom_mode="replace_all")
+        ferro_structure = col_obj.get_ferromagnetic_structure()
+        if magnetic_scheme == 'ferromagnetic':
+            checked_mag_structures[structure_idx].append(ferro_structure)
+        elif magnetic_scheme == 'preserve':
+            checked_mag_structures[structure_idx].append(
+                structures[structure_idx])
+        elif magnetic_scheme == 'antiferromagnetic':
+            if set(ferro_structure.site_properties["magmom"]) == set([0]):
+                print("%s is not magnetic; ferromagnetic structure to be run"
+                      % str(ferro_structure.formula))
+                checked_mag_structures[structure_idx].append(ferro_structure)
+            else:
+                random_enumerations = random_antiferromagnetic(
+                    ferro_structure.site_properties["magmom"], [], num_rand,
+                    num_tries)
+                for enumeration in random_enumerations:
+                    antiferro_structure = ferro_structure.copy()
+                    for magmom_idx in range(
+                            len(antiferro_structure.site_properties[
+                                "magmom"])):
+                        antiferro_structure.replace(
+                            magmom_idx, antiferro_structure.species[
+                                magmom_idx],
+                            properties={'magmom': enumeration[magmom_idx] + 0})
+                    checked_mag_structures[structure_idx].append(
+                        antiferro_structure)
+        else:
+            print('%s not supported at this time; try ferromagnetic, ' +
+                  'preserve, or antiferromagnetic' % magnetic_scheme)
+            sys.exit(1)
+    return checked_mag_structures
 
 
 def main():
@@ -58,6 +124,8 @@ def main():
     if os.path.exists(args.read_yaml_path):
         read_dict = load_yaml(args.read_yaml_path)
         structures = get_MP_structures(read_dict['MPIDs'])
+        mag_structures = get_magnetic_structures(structures,
+                                                 read_dict['Magnetism'])
     else:
         print('%s is not a valid path to a .yml file' % args.read_yaml_path)
         sys.exit(1)
