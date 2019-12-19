@@ -20,4 +20,7 @@ and the National Renewable Energy Laboratory's (NREL) [Eagle](https://www.nrel.g
 within your `.bash_profile` or `.bashrc`. Full path can be found by navigating
 to the `vasp workflow` directory and using the `pwd` command.
 
+4. Navigate to the [configuration](https://github.com/rymo1354/vasp_workflow/tree/master/configuration) folder. In `config.py`, set the `MP_api_key` variable to your
+Material's Project API key.
+
 ### Generating a .yml runfile
