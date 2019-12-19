@@ -26,7 +26,6 @@ class TestMPIDs_runfiles(unittest.TestCase):
         with open(example_yaml_path, 'r') as testfile:
             self.test_yaml = yaml.safe_load(testfile)
             self.test_yaml_path = example_yaml_path
-            print(self.test_yaml)
 
     def test_load_yaml(self):
         # assert that the yaml file created is properly loaded
