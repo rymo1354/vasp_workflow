@@ -100,15 +100,19 @@ def get_magnetic_structures(structures, magnetic_scheme, num_rand=10,
     return checked_mag_structures
 
 
-def write_vasp_input_files(structures, convergence_scheme, user_inputs,
-                           write_path):
+def write_vasp_input_files(structures, formulas, mpids, convergence_scheme,
+                           user_inputs, write_path):
     package = 'pymatgen.io.vasp.sets'
     relax_set = getattr(__import__(package, fromlist=[convergence_scheme]),
                         convergence_scheme)
-    for structure_list in structures:
-        # input_set = relax_set(user_incar_settings=user_inputs)
-        batch_write_input(structure_list, vasp_input_set=relax_set,
-                          output_dir=write_path,
+
+    for structure_list_idx in range(len(structures)):
+        name = str(formulas[structure_list_idx]).replace(' ', '')
+        mpid = str(mpids[structure_list_idx]).replace('-', '_')
+        structure_write_dir = os.path.join(write_path, (name + '_' + mpid))
+        batch_write_input(structures[structure_list_idx],
+                          vasp_input_set=relax_set,
+                          output_dir=structure_write_dir,
                           make_dir_if_not_present=True,
                           user_incar_settings=user_inputs)
 
@@ -139,7 +143,8 @@ def main():
                                                  read_dict['Magnetism'])
         output_write_path = os.path.join(args.output_directory_path,
                                          read_dict['Relaxation_Scheme'])
-        write_vasp_files(mag_structures, read_dict['Convergence_Scheme'],
+        write_vasp_files(mag_structures, read_dict['Formulas'],
+                         read_dict['MPIDs'], read_dict['Convergence_Scheme'],
                          read_dict['Additional_INCAR_tags'],
                          output_write_path)
     else:
