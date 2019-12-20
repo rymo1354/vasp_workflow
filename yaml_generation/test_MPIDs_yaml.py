@@ -15,7 +15,7 @@ class TestMPIDs_yaml(unittest.TestCase):
         # create example_yaml.yml and save dict as self.test_yaml
         args = ['python', 'MPIDs_yaml.py', '-a', 'mp-500', '-o',
                 'example_yaml.yml']
-        subprocess.call(args, shell=True)
+        subprocess.call(args, shell=False)
         with open("example_yaml.yml", 'r') as testfile:
             self.test_yaml = yaml.safe_load(testfile)
 
@@ -32,7 +32,8 @@ class TestMPIDs_yaml(unittest.TestCase):
         self.assertEqual(
             self.test_yaml,
             MPIDs_yaml.copy_yaml("example_yaml_2.yml"))
-        subprocess.run("rm example_yaml_2.yml")
+        args = ["rm", "example_yaml_2.yml"]
+        subprocess.call(args, shell=False)
 
     def test_new_MPIDS(self):
         # Test the 'add', 'none' and lst() inputs for -a flag in MPIDs_yaml
@@ -90,7 +91,7 @@ class TestMPIDs_yaml(unittest.TestCase):
     def tearDownClass(self):
         # Removes the temporary example_yaml.yml file used for testing
         args = ['rm', 'example_yaml.yml']
-        subprocess.call(args, shell=True)
+        subprocess.call(args, shell=False)
 
 
 if __name__ == "__main__":
