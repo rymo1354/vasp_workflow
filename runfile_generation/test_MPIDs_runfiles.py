@@ -22,7 +22,7 @@ class TestMPIDs_runfiles(unittest.TestCase):
         # yaml file creation from paths specified above
         args = ['python', MPIDs_yaml_path, '-a', 'mp-500', '-o',
                 example_yaml_path]
-        subprocess.call(args, shell=True)
+        subprocess.call(args, shell=False)
         with open(example_yaml_path, 'r') as testfile:
             self.test_yaml = yaml.safe_load(testfile)
             self.test_yaml_path = example_yaml_path
@@ -51,7 +51,7 @@ class TestMPIDs_runfiles(unittest.TestCase):
         self.assertEqual(len(np.unique(antiferro_magmoms, axis=1)), num_rand)
 
     def test_get_magnetic_structures(self):
-        # test the assignment of the magnetism scheme for GdAlO3
+        # test the assignment of the magnetism scheme for GdAlO3 (mp-5223)
         structures = MPIDs_runfiles.get_MP_structures(['mp-5223'])
         ferro_structures = MPIDs_runfiles.get_magnetic_structures(
             structures, 'ferromagnetic')
@@ -73,7 +73,7 @@ class TestMPIDs_runfiles(unittest.TestCase):
             self.assertNotEqual(
                 ferro, antiferro_structures[0][i].site_properties["magmom"])
 
-        # test that TaSe2 doesn't attempt antiferromagnetic ordering
+        # test that TaSe2 (mp-500) doesn't attempt antiferromagnetic ordering
         old_stdout = sys.stdout
         result = io.StringIO()
         sys.stdout = result
@@ -89,21 +89,28 @@ class TestMPIDs_runfiles(unittest.TestCase):
                          [0, 0, 0, 0, 0, 0])
 
     def test_write_vasp_input_files(self):
-        structures = MPIDs_runfiles.get_MP_structures(self.test_yaml['MPIDs'])
+        # Test that structures folder is correctly written
+        structures = MPIDs_runfiles.get_MP_structures(['mp-500', 'mp-5223'])
         ferro_structures = MPIDs_runfiles.get_magnetic_structures(
-            structures, 'ferromagnetic')
+            structures, 'antiferromagnetic')
         output_write_directory = os.path.dirname(os.path.abspath(__file__))
         output_write_path = os.path.join(output_write_directory,
                                          self.test_yaml['Relaxation_Scheme'])
         MPIDs_runfiles.write_vasp_input_files(
-            ferro_structures, self.test_yaml['Convergence_Scheme'],
+            ferro_structures, ['Ta Se2', 'Gd4 Al4 012'],
+            ['mp-500', 'mp-5223'], self.test_yaml['Convergence_Scheme'],
             self.test_yaml['Additional_INCAR_tags'], output_write_path)
+        bulk_dir = os.path.join(os.getcwd(), 'bulk')
+        # 'bulk' directory exists
+        self.assertEqual(os.path.exists(bulk_dir), True)
+        args = ['rm', '-r', 'bulk']
+        subprocess.call(args, shell=False)
 
     @classmethod
     def tearDownClass(self):
         # Removes the temporary example_yaml.yml file used for testing
         args = ['rm', self.test_yaml_path]
-        subprocess.call(args, shell=True)
+        subprocess.call(args, shell=False)
 
 
 if __name__ == "__main__":
