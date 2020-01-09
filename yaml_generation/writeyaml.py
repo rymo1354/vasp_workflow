@@ -11,6 +11,7 @@ from distutils.util import strtobool
 from yaml.scanner import ScannerError
 from pymatgen.core.periodic_table import Element
 from pymatgen.io.vasp.inputs import Poscar
+from pathlib import Path
 
 
 ###############################################################################
@@ -111,12 +112,16 @@ class WriteYaml():
 
     def is_vasp_readable_structure(self, path):
         try:
-            Poscar.from_file(path)
+            checked_path = Path(path)
+            Poscar.from_file(str(checked_path))
             return True
         except FileNotFoundError:
             print('%s path does not exist' % path)
             return False
         except UnicodeDecodeError:
+            print('%s likely not a valid CONTCAR or POSCAR' % path)
+            return False
+        except OSError:
             print('%s likely not a valid CONTCAR or POSCAR' % path)
             return False
 
@@ -412,7 +417,7 @@ class WriteYaml():
             self.validate_calculation_type()
 
     def validate_mpids(self):
-        # add in manual vs automatic read in
+        # add in manual vs automatic read in from .yml file
         print(
             'Add/remove MPIDs; existing mp-ids are %s' %
             self.new_dictionary['MPIDs'])
@@ -446,7 +451,7 @@ class WriteYaml():
             self.validate_mpids()
 
     def validate_paths(self):
-        # add manual vs automatic read in
+        # add manual vs automatic read in from .yml file
         print(
             'Add/remove structure PATHs; existing paths are %s' %
             self.new_dictionary['PATHs'])
