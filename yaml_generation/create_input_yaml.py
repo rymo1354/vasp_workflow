@@ -3,7 +3,7 @@ import yaml
 import argparse
 import os
 import sys
-from writeyaml_local import WriteYaml
+from writeyaml import WriteYaml
 from pathlib import Path
 
 def argument_parser():
@@ -29,7 +29,7 @@ def yml_inputs(args):
         if field == 'MPIDs':
             WY.validate_mpids()
 
-        if field == 'PATHS':
+        if field == 'PATHs':
             WY.validate_paths()
 
         if field == 'Calculation_Type':
