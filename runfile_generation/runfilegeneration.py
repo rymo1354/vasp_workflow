@@ -11,7 +11,9 @@ from configuration.config import MP_api_key
 from pymatgen.io.vasp import Poscar
 from pymatgen.analysis.magnetism.analyzer import \
     CollinearMagneticStructureAnalyzer
-from pymatgen.analysis.local_env import CrystalNN
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from pymatgen.core.periodic_table import Element
+from pymatgen.core.structure import Structure
 
 
 class LoadYaml:
@@ -83,7 +85,7 @@ class PmgStructureObjects:
             with MPRester(MP_api_key) as m:
                 try:
                     structure = m.get_structures(mpid, final=True)[0]
-                    structure_key = 'Structure ' + str(self.structure_number) + ' (' + str(structure.formula) + ')'
+                    structure_key = str(structure.formula) + ' ' + str(self.structure_number)
                     self.structures_dict[structure_key] = structure
                     self.structure_number += 1
                 except BaseException:
@@ -95,7 +97,7 @@ class PmgStructureObjects:
             try:
                 poscar = Poscar.from_file(path)
                 structure = poscar.structure
-                structure_key = 'Structure ' + str(self.structure_number) + ' (' + str(structure.formula) + ')'
+                structure_key = str(structure.formula) + ' ' + str(self.structure_number)
                 self.structures_dict[structure_key] = structure
                 self.structure_number += 1
             except FileNotFoundError:
@@ -114,6 +116,7 @@ class Magnetism:
         self.magnetized_structures_dict = {}
         self.num_tries = num_tries
         self.structure_number = 1
+        self.unique_magnetizations = {}
 
         self.get_magnetic_structures()
 
@@ -142,10 +145,12 @@ class Magnetism:
                                             num_afm - 1, num_tries)
 
     def afm_structures(self, structure_key, ferro_structure):
+        # sets magnetism on a structures key and assigns to self.magnetized_structures_dict
         if set(ferro_structure.site_properties["magmom"]) == set([0]):
             print("%s is not magnetic; ferromagnetic structure to be run"
                     % str(ferro_structure.formula))
             self.magnetized_structures_dict[structure_key]['FM'] = ferro_structure
+            self.unique_magnetizations[structure_key]['FM'] = ferro_structure.site_properties["magmom"]
         else:
             random_enumerations = self.random_antiferromagnetic(
                 ferro_structure.site_properties["magmom"], [],
@@ -157,6 +162,7 @@ class Magnetism:
                     antiferro_structure.replace(magmom_idx, antiferro_structure.species[magmom_idx], properties={'magmom': enumeration[magmom_idx] + 0})
                     afm_key = 'AFM' + str(afm_enum_number)
                 self.magnetized_structures_dict[structure_key][afm_key] = antiferro_structure
+                self.unique_magnetizations[structure_key][afm_key] = antiferro_structure.site_properties["magmom"]
                 afm_enum_number += 1
 
     def get_magnetic_structures(self):
@@ -166,20 +172,27 @@ class Magnetism:
             collinear_object = CollinearMagneticStructureAnalyzer(
                 structure, overwrite_magmom_mode="replace_all")
             ferro_structure = collinear_object.get_ferromagnetic_structure()
-            structure_key = 'Structure ' + str(self.structure_number) + ' (' + str(structure.formula) + ')'
+            structure_key = str(structure.formula) + ' ' + str(self.structure_number)
+            self.unique_magnetizations[structure_key] = {}
             self.magnetized_structures_dict[structure_key] = {}
 
             if self.magnetization_dict['Scheme'] == 'preserve':
                 self.magnetized_structures_dict[structure_key]['preserve'] = structure
+                try:
+                    self.unique_magnetizations[structure_key]['preserve'] = structure.site_properties["magmom"]
+                except KeyError:
+                    self.unique_magnetizations[structure_key]['preserve'] = ferro_structure.site_properties["magmom"]
 
             elif self.magnetization_dict['Scheme'] == 'FM':
                 self.magnetized_structures_dict[structure_key]['FM'] = ferro_structure
+                self.unique_magnetizations[structure_key]['FM'] = ferro_structure.site_properties["magmom"]
 
             elif self.magnetization_dict['Scheme'] == 'AFM':
                 self.afm_structures(structure_key, ferro_structure)
 
             elif self.magnetization_dict['Scheme'] == 'FM+AFM':
                 self.magnetized_structures_dict[structure_key]['FM'] = ferro_structure
+                self.unique_magnetizations[structure_key]['FM'] = ferro_structure.site_properties["magmom"]
                 self.afm_structures(structure_key, ferro_structure)
 
             else:
@@ -194,6 +207,7 @@ class CalculationType:
         self.magnetic_structures_dict = magnetic_structures_dict
         self.calculation_dict = calculation_dict
         self.calculation_structures_dict = copy.deepcopy(self.magnetic_structures_dict)
+        self.unique_defect_sites = None
 
         self.alter_structures()
 
@@ -216,62 +230,109 @@ class CalculationType:
             pass
         return structure
 
-    def get_unique_coordination_environment_indices(self, structure, tolerance=0):
-        structure.add_oxidation_state_by_guess() #adds oxidation guess to a structure
-        unique_species = np.unique(structure.species) #returns the unique species in the structure
-        coord_envs = np.zeros((len(structure.species), len(unique_species))) #builds array to house coordination envs
+    def get_unique_sites(self, structure):
+        SGA = SpacegroupAnalyzer(structure)
+        symm_structure = SGA.get_symmetrized_structure()
+        equivalent_sites = symm_structure.as_dict()['equivalent_positions']
+        unique_site_indices, site_counts = np.unique(equivalent_sites, return_counts=True)
+        periodic_site_list = []
+        for ind in unique_site_indices:
+            periodic_site_list.append(symm_structure.sites[ind])
 
-        unique_sites = []
-        site_counter = np.ones(len(unique_species))
-        sites_dict = {} #contains all the equivalent substitution sites in arrays
-        sub_site_dict = {} #contains only the first substitution site in the sites_dict array
-
-        cnn = CrystalNN(weighted_cn=True)
-        for i in range(len(structure.sites)):
-            cnn_structure = cnn.get_nn_info(structure, i)
-            for j in range(len(cnn_structure)):
-                site = cnn_structure[j]['site']
-                for specie in unique_species:
-                    if site.specie == specie:
-                        el_ind = int(np.where(unique_species == specie)[0])
-                        coord_envs[i][el_ind] += cnn_structure[j]['weight']
-
-        for i in range(len(coord_envs)):
-            duplicate_sites = []
-            for j in range(len(coord_envs)):
-                if np.linalg.norm(coord_envs[i]-coord_envs[j]) <= env_tolerance:
-                    duplicate_sites.append(i)
-                    duplicate_sites.append(j)
-            one_unique = list(np.unique(duplicate_sites))
-            if one_unique not in [x for x in unique_sites]:
-                unique_sites.append(one_unique)
-
-        for i in range(len(unique_sites)):
-            species = []
-            for j in range(len(unique_sites[i])):
-                species.append(structure.species[unique_sites[i][j]])
-
-            if len(np.unique(species)) == 1: #only a single element in the group of coordination environments
-                specie = np.unique(species)[0]
-                site_index = np.where(unique_species == specie)
-                key = '%s_site_%s' % (str(specie.element), int(site_counter[site_index]))
-                sites_dict[key] = (specie.element, unique_sites[i])
-                sub_site_dict[key] = (specie.element, unique_sites[i][0]) #pick the first equivalent site
-                site_counter[site_index] += 1
-            else:
-                raise Exception('Coordination environments similar w/in tolerance, but species %s are not' % np.unique(species))
-            # should be a very rare exception when weighted_cn=True in CrystalNN, unless threshold is high
-
-        return sub_site_dict
+        unique_site_dict = {}
+        for i in range(len(periodic_site_list)):
+            unique_site_dict[periodic_site_list[i]] = {}
+            unique_site_dict[periodic_site_list[i]]['Index'] = unique_site_indices[i]
+            unique_site_dict[periodic_site_list[i]]['Equivalent Sites'] = site_counts[i]
+        return unique_site_dict
 
     def alter_structures(self):
         if self.calculation_dict['Type'] == 'bulk':
-            pass
-        elif self.calculation_dict['Type'] == 'defect':
-            # need to perform cell rescaling
-            defect_element = self.calculation_type['Defect']
             for structure in self.calculation_structures_dict.keys():
                 for magnetism in self.calculation_structures_dict[structure].keys():
-                    structure = self.calculation_structures_dict[structure][magnetism]
-                    rescaled_structure = self.structure_rescaler(structure)
+                    base_structure = self.calculation_structures_dict[structure][magnetism]
+                    bulk_dict = {}
+                    bulk_key = str(base_structure.formula)
+                    bulk_dict[bulk_key] = base_structure
+                    self.calculation_structures_dict[structure][magnetism] = bulk_dict
+
+        elif self.calculation_dict['Type'] == 'defect':
+            self.unique_defect_sites = {}
+            defect_element = self.calculation_dict['Defect']
+            for structure in self.calculation_structures_dict.keys():
+                for magnetism in self.calculation_structures_dict[structure].keys():
+                    base_structure = self.calculation_structures_dict[structure][magnetism]
+                    rescaled_structure = self.structure_rescaler(base_structure)
+                    unique_site_dict = self.get_unique_sites(rescaled_structure)
+
+                    defect_dict = {}
+                    # defect_key = str(defect_element) + ' Defect '
+                    defect_number = 1
+                    unique_defects_dict = {}
+                    for periodic_site in unique_site_dict.keys():
+                        defect_structure = copy.deepcopy(rescaled_structure)
+                        if Element(periodic_site.as_dict()['species'][0]['element']) == Element(defect_element):
+                            unique_defects_dict[periodic_site] = unique_site_dict[periodic_site]
+                            defect_structure.remove_sites([unique_site_dict[periodic_site]['Index']])
+                            defect_key = str(defect_structure.formula)
+                            defect_dict[defect_key + ' ' + str(defect_number)] = defect_structure
+                            unique_defects_dict[periodic_site]['Run Directory Name'] = str(defect_key + ' ' + str(defect_number)).replace(' ', '_')
+                            defect_number += 1
+                        else:
+                            continue
+                    self.calculation_structures_dict[structure][magnetism] = defect_dict
+                    if unique_defects_dict != {}:
+                        self.unique_defect_sites[structure] = unique_defects_dict
+
+        else:
+            print('Calculation Type %s not recognized; fatal error' % self.calculation_dict['Type'])
+            sys.exit(1)
+
+
+class WriteVaspFiles:
+    def __init__(self, calculation_structures_dict, calculation_dict, incar_tags, relaxation_set):
+        self.calculation_structures_dict = calculation_structures_dict
+        self.calculation_dict = calculation_dict
+        self.incar_tags = incar_tags
+        self.relaxation_set = relaxation_set
+
+        self.write_vasp_poscar()
+
+    def check_directory_existence(self, directory):
+        try:
+            os.mkdir(directory)
+        except FileExistsError:
             pass
+
+    def write_vasp_poscar(self):
+        if self.calculation_dict['Type'] == 'bulk':
+            calc = 'bulk'
+        elif self.calculation_dict['Type'] == 'defect':
+            calc = str(self.calculation_dict['Defect']) + ' defect'
+
+        top_level_dirname = self.calculation_dict['Type']
+        self.check_directory_existence(top_level_dirname)
+        for structure in self.calculation_structures_dict.keys():
+            structure_dirname = structure.replace(' ', '_')
+            structure_dir_path = os.path.join(top_level_dirname, structure_dirname)
+            for magnetism in self.calculation_structures_dict[structure].keys():
+                magnetism_dirname = magnetism.replace(' ', '_')
+                magnetism_dir_path = os.path.join(structure_dir_path, magnetism_dirname)
+                if not bool(self.calculation_structures_dict[structure][magnetism]) == True:
+                    # empty dictionary check; sometimes occurs with defect calcs
+                    print('%s not compatible with %s calculation' % (structure, calc))
+                    continue
+                else:
+                    for calculation_type in self.calculation_structures_dict[structure][magnetism].keys():
+                        calculation_type_dirname = calculation_type.replace(' ', '_')
+                        calculation_type_path = os.path.join(magnetism_dir_path, calculation_type_dirname)
+                        write_structure = self.calculation_structures_dict[structure][magnetism][calculation_type]
+                        if type(write_structure) == Structure:
+                            self.check_directory_existence(structure_dir_path)
+                            self.check_directory_existence(magnetism_dir_path)
+                            self.check_directory_existence(calculation_type_path)
+                            structure_path = os.path.join(calculation_type_path, "POSCAR")
+                            write_structure.to(filename=structure_path)
+                        else:
+                            print('Not valid structure type')
+                            continue
