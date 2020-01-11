@@ -3,7 +3,7 @@ import yaml
 import argparse
 import os
 import sys
-from writeyaml import WriteYaml
+from yaml_generation.writeyaml import WriteYaml
 from pathlib import Path
 
 def argument_parser():
