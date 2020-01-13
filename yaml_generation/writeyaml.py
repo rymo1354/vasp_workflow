@@ -14,45 +14,19 @@ from pymatgen.io.vasp.inputs import Poscar
 from pathlib import Path
 
 
-###############################################################################
-''' ONLY CHANGE exit_commands, default_dictionary OR allowed_incar_steps '''
-
-exit_commands = ['escape', 'quit', 'stop', 'exit', 'no mas']
-
-default_dictionary = dict(INCAR_Tags={'step0': {'AUTO_TIME': 24, 'NPAR': 1}},
-                          Relaxation_Set='MPRelaxSet',
-                          Magnetization_Scheme={'Scheme': 'FM'},
-                          Max_Submissions=1,
-                          Calculation_Type={'Type': 'bulk'},
-                          MPIDs={},
-                          PATHs={})
-
-allowed_vtst_tools_tags = {"IOPT": [0, 1, 2, 3, 4, 7]}
-# not included in generic Pymatgen VASP inputs
-
-allowed_relaxation_sets = ['MPRelaxSet', 'MITRelaxSet', 'MPMetalRelaxSet',
-                           'MPHSERelaxSet', 'MPStaticSet']
-
-allowed_magnetism = ['preserve', 'FM', 'AFM', 'FM+AFM']
-
-allowed_calculation_types = ['bulk', 'defect']
-
-allowed_incar_steps = ['step0', 'step1', 'step2', 'step3', 'step4', 'step5',
-                       'step6', 'step7', 'step8', 'step9', 'step10']
-# maximum 11 steps by default; can add more steps if necessary (unlikely)
-
-###############################################################################
-
-
 class WriteYaml():
 
     def __init__(self, copy_path):
-        self.exit_commands = exit_commands
-        self.allowed_relaxation_sets = allowed_relaxation_sets
-        self.allowed_magnetism = allowed_magnetism
-        self.allowed_vtst_tools_tags = allowed_vtst_tools_tags
-        self.allowed_calculation_types = allowed_calculation_types
-        self.allowed_incar_steps = allowed_incar_steps
+        with open("yml_write_parameters.json") as write_params:
+            self.write_params = json.loads(write_params.read())
+
+        self.exit_commands = self.write_params["Exit Commands"]
+        self.allowed_relaxation_sets = self.write_params["MP Relaxation Sets"]
+        self.allowed_magnetism = self.write_params["Magnetic Schemes"]
+        self.allowed_vtst_tools_tags = self.write_params["VTST Tags"]
+        self.allowed_calculation_types = self.write_params["Calculation Types"]
+        self.allowed_incar_steps = self.write_params["Calculation Steps"]
+        self.allowed_kpoints_types = self.write_params["KPOINTS Generation"]
 
         with open("incar_parameters.json") as incar_params:
             self.incar_params = json.loads(incar_params.read())
@@ -70,7 +44,7 @@ class WriteYaml():
                 print('Path to %s does not exist' % copy_path)
                 sys.exit(1)
         else:
-            self.default_dictionary = default_dictionary
+            self.default_dictionary = self.write_params["Default Inputs"]
 
         self.new_dictionary = copy.deepcopy(self.default_dictionary)
 
@@ -79,6 +53,13 @@ class WriteYaml():
             float(string)
             return True
         except ValueError:
+            return False
+
+    def is_bool(self, string):
+        try:
+            bool(strtobool(string))
+            return True
+        except:
             return False
 
     def is_pos_or_zero_float(self, string):
@@ -98,6 +79,13 @@ class WriteYaml():
                 return True
             else:
                 return False
+        except ValueError:
+            return False
+
+    def string_to_int_tuple(self, string):
+        try:
+            tuple(map(int, string.split(' ')))
+            return True
         except ValueError:
             return False
 
@@ -237,7 +225,7 @@ class WriteYaml():
 
     def add_or_edit_convergence_step(self):
         print(
-            'Add/edit convergence step; existing steps are %s' %
+            'Add/edit INCAR convergence step; existing steps are \n\n %s\n' %
             self.new_dictionary['INCAR_Tags'])
         print(
             'Can also exit with one of the allowed exit commands %s' %
@@ -245,7 +233,7 @@ class WriteYaml():
         add_or_edit = input('Add or edit steps?\n')
         if add_or_edit in self.exit_commands:
             print(
-                'Exiting: existing INCAR values %s will be used' %
+                'Exiting: existing INCAR values \n\n %s will be used \n' %
                 self.new_dictionary['INCAR_Tags'])
             return
         elif add_or_edit.lower() == 'edit':
@@ -276,6 +264,10 @@ class WriteYaml():
                     self.validate_incar_tags(step_to_edit)
                 elif action.lower() == 'delete':
                     self.new_dictionary['INCAR_Tags'].pop(step_to_edit)
+                    try:
+                        self.new_dictionary['KPOINTs'].pop(step_to_edit)
+                    except KeyError:
+                        pass
                 else:
                     print('%s not a valid action; try again\n')
                 self.add_or_edit_convergence_step()
@@ -348,6 +340,138 @@ class WriteYaml():
         else:
             print('Not a valid option; try again')
             self.validate_incar_tags(step)
+
+    def validate_kpoints(self, step):
+        type = input('KPOINTs generation type; allowed values are %s\n' % self.allowed_kpoints_types)
+        if type in self.allowed_kpoints_types:
+            new_kpoints_dict = {}
+            if type == 'automatic':
+                new_kpoints_dict["Type"] = 'automatic'
+                return new_kpoints_dict
+            elif type == 'automatic_density':
+                new_kpoints_dict["Type"] = 'automatic_density'
+                grid_density = input("Grid Density\n")
+                if self.is_pos_int(grid_density) == True:
+                    new_kpoints_dict["Grid Density"] = int(grid_density)
+                else:
+                    print('Invalid grid density')
+                    self.validate_kpoints(step)
+                force_gamma = input("Force gamma centered mesh? True/False\n")
+                if self.is_bool(force_gamma) == True:
+                    new_kpoints_dict["Force Gamma"] = bool(strtobool(force_gamma))
+                else:
+                    print('Invalid answer to force gamma')
+                    self.validate_kpoints(step)
+                return new_kpoints_dict
+            elif type == 'automatic_density_by_vol':
+                new_kpoints_dict["Type"] = 'automatic_density_by_vol'
+                grid_density = input("Grid Density by Volume (per inverse Angstrom^3)\n")
+                if self.is_pos_int(grid_density) == True:
+                    new_kpoints_dict["Grid Density"] = int(grid_density)
+                else:
+                    print('Invalid grid density')
+                    self.validate_kpoints(step)
+                force_gamma = input("Force gamma centered mesh? True/False\n")
+                if self.is_bool(force_gamma) == True:
+                    new_kpoints_dict["Force Gamma"] = bool(strtobool(force_gamma))
+                else:
+                    print('Invalid answer to force gamma')
+                    self.validate_kpoints(step)
+                return new_kpoints_dict
+            elif type == 'automatic_gamma_density':
+                new_kpoints_dict["Type"] = 'automatic_gamma_density'
+                grid_density = input("Grid Density\n")
+                if self.is_pos_int(grid_density) == True:
+                    new_kpoints_dict["Grid Density"] = int(grid_density)
+                else:
+                    print('Invalid grid density')
+                    self.validate_kpoints(step)
+                return new_kpoints_dict
+            elif type == 'gamma_automatic':
+                new_kpoints_dict["Type"] = 'gamma_automatic'
+                kpts = input('KPTs subdivisions along N1, N2 and N3 reciprocal lattice vectors (as len3 tuple of integers)\n')
+                if self.string_to_int_tuple(kpts) == True:
+                    kpts_tuple = tuple(map(int, kpts.split(' ')))
+                    if len(kpts_tuple) == 3:
+                         new_kpoints_dict["KPTS"] = kpts_tuple
+                    else:
+                        print('Invalid KPTS specified; should be len3 tuple of integers')
+                        self.validate_kpoints(step)
+                else:
+                    print('Input %s cannot be mapped to tuple of integers' % kpts)
+                    self.validate_kpoints(step)
+                shift = input('Grid shift applied to KPTs (as len3 tuple)\n')
+                if self.string_to_int_tuple(shift) == True:
+                    shift_tuple = tuple(map(int, shift.split(' ')))
+                    if len(shift_tuple) == 3:
+                         new_kpoints_dict["Shift"] = shift_tuple
+                    else:
+                        print('Invalid Shift specified; should be len3 tuple of integers')
+                        self.validate_kpoints(step)
+                else:
+                    print('Input %s cannot be mapped to tuple of integers' % shift)
+                    self.validate_kpts(step)
+                return new_kpoints_dict
+            elif type == 'monkhorst_automatic':
+                new_kpoints_dict["Type"] = 'monkhorst_automatic'
+                kpts = input('KPTs subdivisions along N1, N2 and N3 reciprocal lattice vectors (as len3 tuple of integers)\n')
+                if self.string_to_int_tuple(kpts) == True:
+                    kpts_tuple = tuple(map(int, kpts.split(' ')))
+                    if len(kpts_tuple) == 3:
+                         new_kpoints_dict["KPTS"] = kpts_tuple
+                    else:
+                        print('Invalid KPTS specified; should be len3 tuple of integers')
+                        self.validate_kpoints(step)
+                else:
+                    print('Input %s cannot be mapped to tuple of integers' % kpts)
+                    self.validate_kpts(step)
+                shift = input('Grid shift applied to KPTs (as len3 tuple)\n')
+                if self.string_to_int_tuple(shift) == True:
+                    shift_tuple = tuple(map(int, shift.split(' ')))
+                    if len(shift_tuple) == 3:
+                         new_kpoints_dict["Shift"] = shift_tuple
+                    else:
+                        print('Invalid Shift specified; should be len3 tuple of integers')
+                        self.validate_kpoints(step)
+                else:
+                    print('Input %s cannot be mapped to tuple of integers' % shift)
+                    self.validate_kpts(step)
+                return new_kpoints_dict
+            else:
+                print('%s not supported at this time; please insert another' % type)
+                self.validate_kpoints(step)
+
+    def add_or_edit_kpoints(self):
+        print('Add/edit/remove KPOINTs steps; existing tags are \n\n %s \n' % self.new_dictionary['KPOINTs'])
+        print('Can [add, edit, remove] steps existing in INCAR_Tags %s' % list(self.new_dictionary['INCAR_Tags'].keys()))
+        add_or_edit = input('Add, edit or remove KPOINTs steps?\n')
+        if add_or_edit.lower() == 'remove':
+            step_to_remove = input('Step to remove\n')
+            if step_to_remove in self.new_dictionary['KPOINTs']:
+                self.new_dictionary['KPOINTs'].pop(step_to_remove)
+            else:
+                print('%s not an existing KPOINTs tag')
+            self.add_or_edit_kpoints()
+        if add_or_edit.lower() == 'add':
+            step_to_add = input('Step to add\n')
+            if step_to_add in self.new_dictionary['INCAR_Tags']:
+                self.new_dictionary['KPOINTs'][step_to_add] = self.validate_kpoints(step_to_add)
+            else:
+                print('%s not an existing INCAR_Tags step; try again' % step_to_add)
+            self.add_or_edit_kpoints()
+        elif add_or_edit.lower() == 'edit':
+            step_to_edit = input('Step to edit\n')
+            if step_to_edit in self.new_dictionary['KPOINTs']:
+                self.new_dictionary['KPOINTs'][step_to_edit] = self.validate_kpoints(step_to_edit)
+            else:
+                print('Step %s does not exist in tags; try adding this step' % step_to_edit)
+            self.add_or_edit_kpoints()
+        elif add_or_edit.lower() in self.exit_commands:
+            print('Exiting: existing tags %s will be used' % self.new_dictionary['KPOINTs'])
+            return
+        else:
+            print('Not a valid option; try again')
+            self.add_or_edit_kpoints()
 
     def validate_magnetization(self):
         print('Magnetization_Scheme; existing is %s' %
