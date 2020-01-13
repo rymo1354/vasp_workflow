@@ -37,6 +37,15 @@ INCAR_Tags:
     LAECHG: true
     NELM: 500
     NSW: 0
+KPOINTs:
+  step0:
+    Force Gamma: false
+    Grid Density: 300
+    Type: automatic_density
+  step1:
+    Force Gamma: false
+    Grid Density: 1000
+    Type: automatic_density
 MPIDs: {}
 Magnetization_Scheme:
   Max_antiferro: 20
