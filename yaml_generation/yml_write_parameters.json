@@ -1,0 +1,22 @@
+{
+  "Exit Commands": ["escape", "quit", "stop", "exit", "no mas"],
+  "Default Inputs": {"INCAR_Tags": {"step0": {"AUTO_TIME": 24, "NPAR": 1}},
+                     "KPOINTs": {"step0": {"Type": "automatic"}},
+                     "Relaxation_Set": "MPRelaxSet",
+                     "Magnetization_Scheme": {"Scheme": "FM"},
+                     "Max_Submissions": 1,
+                     "Calculation_Type": {"Type": "bulk"},
+                     "MPIDs": {},
+                     "PATHs": {}},
+  "VTST Tags": {"IOPT": [0, 1, 2, 3, 4, 7]},
+  "MP Relaxation Sets": ["MPRelaxSet", "MITRelaxSet", "MPMetalRelaxSet",
+                         "MPHSERelaxSet", "MPStaticSet"],
+  "Magnetic Schemes": ["preserve", "FM", "AFM", "FM+AFM"],
+  "Calculation Types": ["bulk", "defect"],
+  "Calculation Steps": ["step0", "step1", "step2", "step3", "step4", "step5",
+                        "step6", "step7", "step8", "step9", "step10"],
+  "KPOINTS Generation": ["automatic", "automatic_density",
+                         "automatic_density_by_vol",
+                         "automatic_gamma_density", "gamma_automatic",
+                         "monkhorst_automatic"]
+}
