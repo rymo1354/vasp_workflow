@@ -99,7 +99,6 @@ def get_magnetic_structures(structures, magnetic_scheme, num_rand=10,
             sys.exit(1)
     return checked_mag_structures
 
-
 def write_vasp_input_files(structures, formulas, mpids, convergence_scheme,
                            user_inputs, write_path):
     package = 'pymatgen.io.vasp.sets'
