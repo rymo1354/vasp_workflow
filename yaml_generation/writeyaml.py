@@ -6,7 +6,8 @@ import sys
 from pymatgen.ext.matproj import MPRester
 import json
 import copy
-from configuration.config import MP_api_key
+from configuration import mp_api
+from configuration.mp_api import MP_api_key
 from distutils.util import strtobool
 from yaml.scanner import ScannerError
 from pymatgen.core.periodic_table import Element
@@ -17,9 +18,9 @@ from pathlib import Path
 class WriteYaml():
 
     def __init__(self, copy_path):
-        self.parent_folder = os.path.dirname(os.path.abspath(__file__))
+        self.parent_folder = os.path.dirname(os.path.abspath(mp_api.__file__))
         # expects the write_parameters and incar_parameters files to be
-        # in the parent folder of this file
+        # in the configuration directory
         with open(os.path.join(self.parent_folder, "yml_write_parameters.json")) as write_params:
             self.write_params = json.loads(write_params.read())
 
