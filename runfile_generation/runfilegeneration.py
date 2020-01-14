@@ -7,7 +7,7 @@ import random
 import numpy as np
 import copy
 from pymatgen.ext.matproj import MPRester
-from configuration.config import MP_api_key
+from configuration.mp_api import MP_api_key
 from pymatgen.io.vasp import Poscar
 from pymatgen.analysis.magnetism.analyzer import \
     CollinearMagneticStructureAnalyzer

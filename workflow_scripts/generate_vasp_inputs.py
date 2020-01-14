@@ -4,7 +4,7 @@ import argparse
 import os
 import copy
 from runfile_generation.runfilegeneration import *
-from yaml_generation.create_input_yaml import write_yaml
+from workflow_scripts.create_input_yaml import write_yaml
 
 def argument_parser():
     parser = argparse.ArgumentParser()
