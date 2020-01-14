@@ -347,7 +347,7 @@ class WriteYaml():
             self.validate_incar_tags(step)
 
     def validate_kpoints(self, step):
-        if step == "0 step":
+        if step == "0 Step":
             allowed_types = self.allowed_kpoints_types
         else:
             # for multi-step convergence where only gamma is used
