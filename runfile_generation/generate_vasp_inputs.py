@@ -20,15 +20,11 @@ def argument_parser():
 def main():
     args = argument_parser()
     LY = LoadYaml(args.readfile_path)
-    PSO = PmgStructureObjects(LY.mpids, LY.paths)
+    PSO = PmgStructureObjects(LY.mpids, LY.paths, LY.calculation_type["Rescale"])
     M = Magnetism(PSO.structures_dict, LY.magnetization_scheme)
     CT = CalculationType(M.magnetized_structures_dict, LY.calculation_type)
-    WVF = WriteVaspFiles(CT.calculation_structures_dict, LY.calculation_type, None, None)
-
-    with open('defect/test.txt', 'w') as file:
-        file.write(str(M.unique_magnetizations))
-        file.close()
-    # currently writing just the POSCAR files
+    WVF = WriteVaspFiles(CT.calculation_structures_dict, LY.calculation_type, LY.relaxation_set,
+                         LY.incar_tags, LY.kpoints)
 
 if __name__ == "__main__":
     main()

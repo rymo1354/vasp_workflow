@@ -14,6 +14,11 @@ from pymatgen.analysis.magnetism.analyzer import \
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.periodic_table import Element
 from pymatgen.core.structure import Structure
+from pymatgen.io.vasp.outputs import Vasprun
+from pymatgen.io.vasp.outputs import Outcar
+from pymatgen.io.vasp.inputs import Kpoints
+from pymatgen.io.vasp.sets import get_structure_from_prev_run
+from pymatgen.io.vasp.sets import batch_write_input
 
 
 class LoadYaml:
@@ -53,15 +58,20 @@ class LoadYaml:
             sys.exit(1)
         try:
             self.magnetization_scheme = self.loaded_dictionary['Magnetization_Scheme']
-        except BaseException:
+        except KeyError:
             print(
                 'Magnetization_Scheme not in %s; invalid input file' %
                 load_path)
             sys.exit(1)
         try:
             self.incar_tags = self.loaded_dictionary['INCAR_Tags']
-        except BaseException:
+        except KeyError:
             print('INCAR_Tags not in %s; invalid input file' % load_path)
+            sys.exit(1)
+        try:
+            self.kpoints = self.loaded_dictionary['KPOINTs']
+        except KeyError:
+            print('KPOINTs not in %s; invalid input file' % load_path)
             sys.exit(1)
         try:
             self.max_submissions = self.loaded_dictionary['Max_Submissions']
@@ -71,20 +81,42 @@ class LoadYaml:
 
 
 class PmgStructureObjects:
-    def __init__(self, mpids, paths):
+    def __init__(self, mpids, paths, rescale):
         self.mpids = mpids
         self.paths = paths
+        self.rescale = rescale
         self.structures_dict = {}
         self.structure_number = 1
 
         self.mpid_structures()
         self.path_structures()
 
+    def structure_rescaler(self, structure):
+        if len(structure.species) <= 2:
+            structure.make_supercell([4, 4, 4])
+        elif len(structure.species) <= 4:
+            structure.make_supercell([3, 3, 3])
+        elif len(structure.species) <= 7:
+            structure.make_supercell([3, 3, 2])
+        elif len(structure.species) <= 10:
+            structure.make_supercell([3, 2, 2])
+        elif len(structure.species) <= 16:
+            structure.make_supercell([2, 2, 2])
+        elif len(structure.species) <= 32:
+            structure.make_supercell([2, 2, 1])
+        elif len(structure.species) <= 64:
+            structure.make_supercell([2, 1, 1])
+        else:
+            pass
+        return structure
+
     def mpid_structures(self):
         for mpid in self.mpids:
             with MPRester(MP_api_key) as m:
                 try:
                     structure = m.get_structures(mpid, final=True)[0]
+                    if self.rescale == True:
+                        structure = self.structure_rescaler(structure)
                     structure_key = str(structure.formula) + ' ' + str(self.structure_number)
                     self.structures_dict[structure_key] = structure
                     self.structure_number += 1
@@ -94,20 +126,43 @@ class PmgStructureObjects:
 
     def path_structures(self):
         for path in self.paths:
-            try:
-                poscar = Poscar.from_file(path)
-                structure = poscar.structure
-                structure_key = str(structure.formula) + ' ' + str(self.structure_number)
-                self.structures_dict[structure_key] = structure
-                self.structure_number += 1
-            except FileNotFoundError:
-                print('%s path does not exist' % path)
-                continue
-            except UnicodeDecodeError:
-                print('%s likely not a valid CONTCAR or POSCAR' % path)
-                continue
-            except OSError:
-                print('%s likely not a valid CONTCAR or POSCAR' % path)
+            parent_dir = os.path.dirname(os.path.abspath(path))
+            vasprun_path = os.path.join(parent_dir, 'vasprun.xml')
+            outcar_path = os.path.join(parent_dir, 'OUTCAR')
+            if os.path.exists(vasprun_path) == True and os.path.exists(outcar_path) == True:
+                try:
+                    V = Vasprun(vasprun_path)
+                    O = Outcar(outcar_path)
+                    structure = get_structure_from_prev_run(V, O)
+                    if self.rescale == True:
+                        structure = self.structure_rescaler(structure)
+                    structure_key = str(structure.formula) + ' ' + str(self.structure_number)
+                    self.structures_dict[structure_key] = structure
+                    self.structure_number += 1
+                except UnicodeDecodeError:
+                    print('Either %s or %s not readable' % (vasprun_path, outcar_path))
+                    continue
+                except OSError:
+                    print('Either %s or %s not readable' % (vasprun_path, outcar_path))
+                    continue
+            else:
+                try:
+                    poscar = Poscar.from_file(path)
+                    structure = poscar.structure
+                    if self.rescale == True:
+                        structure = self.structure_rescaler(structure)
+                    structure_key = str(structure.formula) + ' ' + str(self.structure_number)
+                    self.structures_dict[structure_key] = structure
+                    self.structure_number += 1
+                except FileNotFoundError:
+                    print('%s path does not exist' % path)
+                    continue
+                except UnicodeDecodeError:
+                    print('%s likely not a valid CONTCAR or POSCAR' % path)
+                    continue
+                except OSError:
+                    print('%s likely not a valid CONTCAR or POSCAR' % path)
+                    continue
 
 class Magnetism:
     def __init__(self, structures_dict, magnetization_dict, num_tries=100):
@@ -170,8 +225,8 @@ class Magnetism:
         # num_rand and num_tries only used for random antiferromagnetic assignment
         for structure in self.structures_dict.values():
             collinear_object = CollinearMagneticStructureAnalyzer(
-                structure, overwrite_magmom_mode="replace_all")
-            ferro_structure = collinear_object.get_ferromagnetic_structure()
+                structure, make_primitive=False, overwrite_magmom_mode="replace_all")
+            ferro_structure = collinear_object.get_ferromagnetic_structure(make_primitive=False)
             structure_key = str(structure.formula) + ' ' + str(self.structure_number)
             self.unique_magnetizations[structure_key] = {}
             self.magnetized_structures_dict[structure_key] = {}
@@ -211,25 +266,6 @@ class CalculationType:
 
         self.alter_structures()
 
-    def structure_rescaler(self, structure):
-        if len(structure.species) <= 2:
-            structure.make_supercell([4, 4, 4])
-        elif len(structure.species) <= 4:
-            structure.make_supercell([3, 3, 3])
-        elif len(structure.species) <= 7:
-            structure.make_supercell([3, 3, 2])
-        elif len(structure.species) <= 10:
-            structure.make_supercell([3, 2, 2])
-        elif len(structure.species) <= 16:
-            structure.make_supercell([2, 2, 2])
-        elif len(structure.species) <= 32:
-            structure.make_supercell([2, 2, 1])
-        elif len(structure.species) <= 64:
-            structure.make_supercell([2, 1, 1])
-        else:
-            pass
-        return structure
-
     def get_unique_sites(self, structure):
         SGA = SpacegroupAnalyzer(structure)
         symm_structure = SGA.get_symmetrized_structure()
@@ -262,8 +298,7 @@ class CalculationType:
             for structure in self.calculation_structures_dict.keys():
                 for magnetism in self.calculation_structures_dict[structure].keys():
                     base_structure = self.calculation_structures_dict[structure][magnetism]
-                    rescaled_structure = self.structure_rescaler(base_structure)
-                    unique_site_dict = self.get_unique_sites(rescaled_structure)
+                    unique_site_dict = self.get_unique_sites(base_structure)
 
                     defect_dict = {}
                     # defect_key = str(defect_element) + ' Defect '
@@ -290,13 +325,15 @@ class CalculationType:
 
 
 class WriteVaspFiles:
-    def __init__(self, calculation_structures_dict, calculation_dict, incar_tags, relaxation_set):
+    def __init__(self, calculation_structures_dict, calculation_dict,
+                 relaxation_set, incar_tags, kpoints):
         self.calculation_structures_dict = calculation_structures_dict
         self.calculation_dict = calculation_dict
-        self.incar_tags = incar_tags
         self.relaxation_set = relaxation_set
+        self.incar_tags = incar_tags
+        self.kpoints = kpoints
 
-        self.write_vasp_poscar()
+        self.write_vasp_inputs()
 
     def check_directory_existence(self, directory):
         try:
@@ -304,11 +341,70 @@ class WriteVaspFiles:
         except FileExistsError:
             pass
 
-    def write_vasp_poscar(self):
+    def get_relax_set(self):
+        package = 'pymatgen.io.vasp.sets'
+        relax_set = getattr(__import__(package, fromlist=[self.relaxation_set]),
+                            self.relaxation_set)
+        return relax_set
+
+    def get_0_step(self):
+        # gets lowest number step
+        steps = list(self.kpoints.keys())
+        if len(steps) == 0:
+            print('No "0 Step" KPOINTs params supplied; using %s default' % self.relaxation_set)
+            return None
+        else:
+            if "0 Step" in steps:
+                return "0 Step"
+            else:
+                print('No "0 Step" KPOINTs params supplied; using %s default' % self.relaxation_set)
+                return None
+
+    def get_kpoints_object(self, step, structure):
+        try:
+            kpoints_tags = self.kpoints[step]
+        except KeyError:
+            return None
+
+        if kpoints_tags['Type'] == 'automatic_density':
+            K = Kpoints.automatic_density(structure, kpoints_tags['Grid Density'],
+                                        kpoints_tags['Force Gamma'])
+        elif kpoints_tags['Type'] == 'automatic_density_by_vol':
+            K = Kpoints.automatic_density_by_vol(structure, kpoints_tags['Grid Density per A^(-3) of Reciprocal Cell'],
+                                        kpoints_tags['Force Gamma'])
+        elif kpoints_tags['Type'] == 'automatic_gamma_density':
+            K = Kpoints.automatic_gamma_density(structure, kpoints_tags['Grid Density'])
+        elif kpoints_tags['Type'] == 'gamma_automatic':
+            K = Kpoints.gamma_automatic(kpoints_tags["KPTS"], kpoints_tags["Shift"])
+        elif kpoints_tags['Type'] == 'monkhorst_automatic':
+            K = Kpoints.monkhorst_automatic(kpoints_tags["KPTS"], kpoints_tags["Shift"])
+        else:
+            print('Invalid kpoints generation type %s; fatal error' % kpoints_tags['Type'])
+            sys.exit(1)
+        return K
+
+    def format_convergence_file(self, structure):
+        all_steps = []
+        for step in list(self.incar_tags.keys()):
+            step_array = []
+            step_array.append('\n' + step + '\n')
+            for tag in list(self.incar_tags[step].keys()):
+                step_array.append(tag + ' = ' + str(self.incar_tags[step][tag]))
+            if step in list(self.kpoints.keys()):
+                K = self.get_kpoints_object(step, structure)
+                kpoints_string = " "
+                step_array.append('\nKPOINTS ' + kpoints_string.join(map(str, K.kpts[0])))
+            all_steps += step_array
+        return all_steps
+
+    def write_vasp_inputs(self):
         if self.calculation_dict['Type'] == 'bulk':
             calc = 'bulk'
         elif self.calculation_dict['Type'] == 'defect':
             calc = str(self.calculation_dict['Defect']) + ' defect'
+
+        relax_set = self.get_relax_set()
+        first_step = self.get_0_step()
 
         top_level_dirname = self.calculation_dict['Type']
         self.check_directory_existence(top_level_dirname)
@@ -325,14 +421,27 @@ class WriteVaspFiles:
                 else:
                     for calculation_type in self.calculation_structures_dict[structure][magnetism].keys():
                         calculation_type_dirname = calculation_type.replace(' ', '_')
-                        calculation_type_path = os.path.join(magnetism_dir_path, calculation_type_dirname)
+                        calculation_type_dir_path = os.path.join(magnetism_dir_path, calculation_type_dirname)
                         write_structure = self.calculation_structures_dict[structure][magnetism][calculation_type]
                         if type(write_structure) == Structure:
+                            kpoints_object = self.get_kpoints_object(first_step, write_structure)
                             self.check_directory_existence(structure_dir_path)
                             self.check_directory_existence(magnetism_dir_path)
-                            self.check_directory_existence(calculation_type_path)
-                            structure_path = os.path.join(calculation_type_path, "POSCAR")
-                            write_structure.to(filename=structure_path)
+                            self.check_directory_existence(calculation_type_dir_path)
+                            try:
+                                user_incar_settings = self.incar_tags["0 Step"]
+                            except:
+                                user_incar_settings = None
+                            v = relax_set(write_structure,
+                                          user_incar_settings=user_incar_settings,
+                                          user_kpoints_settings=kpoints_object)
+                            v.write_input(calculation_type_dir_path)
+
+                            with open(os.path.join(calculation_type_dir_path,'CONVERGENCE'),'w') as f:
+                                for line in self.format_convergence_file(write_structure):
+                                    f.write("%s\n" % line)
+                                f.close()
+
                         else:
                             print('Not valid structure type')
                             continue

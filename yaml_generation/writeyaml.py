@@ -17,7 +17,10 @@ from pathlib import Path
 class WriteYaml():
 
     def __init__(self, copy_path):
-        with open("yml_write_parameters.json") as write_params:
+        self.parent_folder = os.path.dirname(os.path.abspath(__file__))
+        # expects the write_parameters and incar_parameters files to be
+        # in the parent folder of this file
+        with open(os.path.join(self.parent_folder, "yml_write_parameters.json")) as write_params:
             self.write_params = json.loads(write_params.read())
 
         self.exit_commands = self.write_params["Exit Commands"]
@@ -28,7 +31,7 @@ class WriteYaml():
         self.allowed_incar_steps = self.write_params["Calculation Steps"]
         self.allowed_kpoints_types = self.write_params["KPOINTS Generation"]
 
-        with open("incar_parameters.json") as incar_params:
+        with open(os.path.join(self.parent_folder, "incar_parameters.json")) as incar_params:
             self.incar_params = json.loads(incar_params.read())
 
         if copy_path is not None:
@@ -309,6 +312,8 @@ class WriteYaml():
                 else:
                     print('%s not a valid input for AUTO_TIME' % value)
             elif tag in ['LDAUU', 'LDAUJ', 'LDAUL']:
+                print('\nWARNING: ADDING USER TAGS WILL OVERWRITE EXISTING %s %s TAGS' % (self.new_dictionary['Relaxation_Set'], tag))
+                print('Check https://pymatgen.org/pymatgen.io.vasp.sets.html for pre-existing tags\n')
                 value_dict = self.check_valid_LDAU_value(tag)
                 self.new_dictionary['INCAR_Tags'][step][tag] = value_dict
             elif tag in self.allowed_vtst_tools_tags.keys():
@@ -342,13 +347,15 @@ class WriteYaml():
             self.validate_incar_tags(step)
 
     def validate_kpoints(self, step):
-        type = input('KPOINTs generation type; allowed values are %s\n' % self.allowed_kpoints_types)
-        if type in self.allowed_kpoints_types:
+        if step == "0 Step":
+            allowed_types = self.allowed_kpoints_types
+        else:
+            # for multi-step convergence where only gamma is used
+            allowed_types = ['automatic_gamma_density', 'gamma_automatic']
+        type = input('KPOINTs generation type; allowed values for %s are %s\n' % (step, allowed_types))
+        if type in allowed_types:
             new_kpoints_dict = {}
-            if type == 'automatic':
-                new_kpoints_dict["Type"] = 'automatic'
-                return new_kpoints_dict
-            elif type == 'automatic_density':
+            if type == 'automatic_density':
                 new_kpoints_dict["Type"] = 'automatic_density'
                 grid_density = input("Grid Density\n")
                 if self.is_pos_int(grid_density) == True:
@@ -367,7 +374,7 @@ class WriteYaml():
                 new_kpoints_dict["Type"] = 'automatic_density_by_vol'
                 grid_density = input("Grid Density by Volume (per inverse Angstrom^3)\n")
                 if self.is_pos_int(grid_density) == True:
-                    new_kpoints_dict["Grid Density"] = int(grid_density)
+                    new_kpoints_dict["Grid Density per A^(-3) of Reciprocal Cell"] = int(grid_density)
                 else:
                     print('Invalid grid density')
                     self.validate_kpoints(step)
@@ -440,6 +447,9 @@ class WriteYaml():
             else:
                 print('%s not supported at this time; please insert another' % type)
                 self.validate_kpoints(step)
+        else:
+            print('%s not supported at this time; please insert another' % type)
+            self.validate_kpoints(step)
 
     def add_or_edit_kpoints(self):
         print('Add/edit/remove KPOINTs steps; existing tags are \n\n %s \n' % self.new_dictionary['KPOINTs'])
@@ -516,18 +526,27 @@ class WriteYaml():
     def validate_calculation_type(self):
         print('Calculation_Type; existing is %s' %
               self.new_dictionary['Calculation_Type'])
-        calculation = input(
-            'Type (%s' %
-            self.allowed_calculation_types +
-            ')\n')
+        calculation = input('Type (%s' % self.allowed_calculation_types + ')\n')
         if calculation.lower() == 'bulk':
             self.new_dictionary['Calculation_Type']['Type'] = 'bulk'
             try:
                 del self.new_dictionary['Calculation_Type']['Defect']
             except KeyError:
                 pass
+            rescale = input("Rescale? [True/False]\n")
+            if self.is_bool(rescale):
+                self.new_dictionary['Calculation_Type']['Rescale'] = bool(strtobool(rescale))
+            else:
+                print('%s invalid answer for rescale' % rescale)
+                self.validate_calculation_type()
         elif calculation.lower() == 'defect':
             self.new_dictionary['Calculation_Type']['Type'] = 'defect'
+            rescale = input("Rescale? [True/False]\n")
+            if self.is_bool(rescale):
+                self.new_dictionary['Calculation_Type']['Rescale'] = bool(strtobool(rescale))
+            else:
+                print('%s invalid answer for rescale' % rescale)
+                self.validate_calculation_type()
             element = input(
                 'Defect element abbreviation; i.e. H, O, C, etc.\n')
             try:
