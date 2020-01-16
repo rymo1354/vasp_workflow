@@ -54,7 +54,7 @@ to be performed after each new pull request. Learn more at the Material's Projec
 are on your path.
 
 You should be ready to go! If you're having issues with the setup, please contact me
-at [mailto](mailto:rymo1354@colorado.edu).
+at [myemail](mailto:rymo1354@colorado.edu).
 
 ## create_input_yaml.py
 
@@ -99,7 +99,7 @@ Absolute paths of files on the computing system can also be used to get `POSCAR`
 files. This files must be compatible with the `pymatgen.io.vasp.inputs.Poscar`
 class to be read correctly, i.e. both valid Vasp `POSCAR` inputs and `CONTCAR`
 outputs can be used. A more detailed description of how the `POSCAR` file is read
-can be found here: [inputs](https://pymatgen.org/pymatgen.io.vasp.inputs.html)
+can be found on the Materials Project [website](https://pymatgen.org/pymatgen.io.vasp.inputs.html)
 
 ### Calculation_Type
 
