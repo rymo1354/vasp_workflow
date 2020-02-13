@@ -165,9 +165,7 @@ def get_queue(computer, jobtype, time, nodes):
         elif time > 24:
             return 'janus-long'
     elif computer == "summit":
-        if time <= 1:
-            return 'debug'
-        elif time <= 24:
+        if time <= 24:
             return 'normal'
         elif time > 24:
             return 'long'
