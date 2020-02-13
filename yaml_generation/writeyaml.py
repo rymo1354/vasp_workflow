@@ -306,12 +306,13 @@ class WriteYaml():
         add_or_remove = input('Add or remove tags?\n')
         if add_or_remove.lower() == 'add':
             tag = input('Name of tag to add\n')
-            if tag == 'AUTO_TIME':
+            if tag == 'AUTO_TIME' or tag == 'AUTO_CORES' or tag == 'AUTO_NODES':
+                # inputs specifically made for vasp.py; not VASP defaults
                 value = input('Value of tag to add\n')
                 if self.is_pos_int(value):
                     self.new_dictionary['INCAR_Tags'][step][tag] = int(value)
                 else:
-                    print('%s not a valid input for AUTO_TIME' % value)
+                    print('%s not a valid input for %s' % (tag, value))
             elif tag in ['LDAUU', 'LDAUJ', 'LDAUL']:
                 print('\nWARNING: ADDING USER TAGS WILL OVERWRITE EXISTING %s %s TAGS' % (self.new_dictionary['Relaxation_Set'], tag))
                 print('Check https://pymatgen.org/pymatgen.io.vasp.sets.html for pre-existing tags\n')
