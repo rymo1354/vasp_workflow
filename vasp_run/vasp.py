@@ -487,6 +487,16 @@ if __name__ == '__main__':
     template = env.get_template(template)
     with open(script, 'w+') as f:
         f.write(template.render(keywords))
+
+    # adds the account variable to the submission script 
+    account_line = '#SBATCH --account=%s' % account
+    with open(script, 'r') as f:
+        data = f.readlines()
+
+    data[9] = str(account_line)+'\n'
+    with open(script, 'w') as f:
+        f.writelines(data)
+
     os.system(submit + script)
     # subprocess.call([submit, script])
     print('Submitted ' + name + ' to ' + queue)
