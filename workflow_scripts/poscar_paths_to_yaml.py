@@ -36,7 +36,7 @@ def is_vasp_readable_structure(path):
 def get_paths_dictionary(copied_yaml, poscars_dir):
     paths = {}
     with open(copied_yaml, 'r') as yaml_file:
-        copied_yaml = yaml.load(yaml_file, yaml.FullLoader)
+        copied_yaml = yaml.safe_load(yaml_file)
 
     for roots, dirs, files in os.walk(poscars_dir):
         for name in files:
