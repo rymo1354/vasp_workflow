@@ -177,7 +177,7 @@ def get_queue(computer, jobtype, time, nodes):
         elif time <= 48 and nodes <= 296:
             return 'batch-h'
         elif time > 48 and time <= 240 and nodes <= 120:
-            return'long'
+            return 'long'
         else:
             raise Exception(
                 'Peregrine Queue Configuration not Valid: ' +
@@ -186,7 +186,8 @@ def get_queue(computer, jobtype, time, nodes):
                 nodes +
                 ' nodes ')
     elif computer == "eagle":
-        return ''
+        return 'standard'
+        #return ''
     elif computer == "psiops":
         if nodes <= 1:
             return 'gb'

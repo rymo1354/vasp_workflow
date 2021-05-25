@@ -19,6 +19,7 @@ from pymatgen.io.vasp.outputs import Outcar
 from pymatgen.io.vasp.inputs import Kpoints
 from pymatgen.io.vasp.sets import get_structure_from_prev_run
 from pymatgen.io.vasp.sets import batch_write_input
+from yaml.scanner import ScannerError
 
 
 class LoadYaml:
@@ -165,11 +166,14 @@ class PmgStructureObjects:
                     continue
 
 class Magnetism:
-    def __init__(self, structures_dict, magnetization_dict, num_tries=100):
+    def __init__(self, structures_dict, magnetization_dict):
         self.structures_dict = structures_dict
         self.magnetization_dict = magnetization_dict
         self.magnetized_structures_dict = {}
-        self.num_tries = num_tries
+        try:
+            self.num_tries = self.magnetization_dict['Max_antiferro']*5 # Avoid recursion errors
+        except:
+            self.num_tries = 0
         self.structure_number = 1
         self.unique_magnetizations = {}
 
@@ -197,7 +201,7 @@ class Magnetism:
         else:
             used_enumerations.append(antiferro_mag)
             return self.random_antiferromagnetic(ferro_magmom, used_enumerations,
-                                            num_afm - 1, num_tries)
+                                            num_afm, num_tries - 1)
 
     def afm_structures(self, structure_key, ferro_structure):
         # sets magnetism on a structures key and assigns to self.magnetized_structures_dict
@@ -211,14 +215,34 @@ class Magnetism:
                 ferro_structure.site_properties["magmom"], [],
                 self.magnetization_dict['Max_antiferro'], self.num_tries)
             afm_enum_number = 1
+            written = 0
             for enumeration in random_enumerations:
                 antiferro_structure = ferro_structure.copy()
                 for magmom_idx in range(len(antiferro_structure.site_properties["magmom"])):
                     antiferro_structure.replace(magmom_idx, antiferro_structure.species[magmom_idx], properties={'magmom': enumeration[magmom_idx] + 0})
+                # Check to make sure the structure isn't equal to any existing structures
+                exists = False
+                csm = CollinearMagneticStructureAnalyzer(antiferro_structure)
+                for existing_key in list(self.magnetized_structures_dict[structure_key]):
+                     matches = csm.matches_ordering(self.magnetized_structures_dict[structure_key][existing_key])
+                     if matches == True:
+                         exists = True
+                         break
+                     else:
+                         pass
+                # Write to the magnetism dictionary if the structure does not exist
+                if exists == False:
                     afm_key = 'AFM' + str(afm_enum_number)
-                self.magnetized_structures_dict[structure_key][afm_key] = antiferro_structure
-                self.unique_magnetizations[structure_key][afm_key] = antiferro_structure.site_properties["magmom"]
-                afm_enum_number += 1
+                    self.magnetized_structures_dict[structure_key][afm_key] = antiferro_structure
+                    self.unique_magnetizations[structure_key][afm_key] = antiferro_structure.site_properties["magmom"]
+                    afm_enum_number += 1
+                    written += 1
+                else:
+                    pass
+
+                # Break condition if Max_antiferro is reached
+                if written == self.magnetization_dict['Max_antiferro']:
+                    break
 
     def get_magnetic_structures(self):
         # assigns magnetism to structures. returns the magnetic get_structures
