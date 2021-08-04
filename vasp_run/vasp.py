@@ -309,7 +309,8 @@ if __name__ == '__main__':
             'vasprun.xml',
             parse_dos=False,
             parse_eigen=False,
-            parse_potcar_file=False)
+            parse_potcar_file=False, 
+            exception_on_bad_xml=False)
         if run.converged:
             exit('Run is already converged')
         elif args.finish_convergence != []:
