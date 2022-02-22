@@ -329,7 +329,8 @@ class CalculationType:
                     defect_number = 1
                     unique_defects_dict = {}
                     for periodic_site in unique_site_dict.keys():
-                        defect_structure = copy.deepcopy(rescaled_structure)
+                        #defect_structure = copy.deepcopy(rescaled_structure)
+                        defect_structure = copy.deepcopy(base_structure) # Fix this so re-scaling can be performed here
                         if Element(periodic_site.as_dict()['species'][0]['element']) == Element(defect_element):
                             unique_defects_dict[periodic_site] = unique_site_dict[periodic_site]
                             defect_structure.remove_sites([unique_site_dict[periodic_site]['Index']])
