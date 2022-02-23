@@ -192,3 +192,8 @@ you will be prompted for a the name of this workflow. If jobs have already been 
 you will see the status of those jobs by rerunning `rerun_workflow.py`. Any failed jobs or
 jobs that have reached their time limit will be stored in the directory system. To rerun these
 jobs, simply execute `rerun_workflow.py`  
+
+### Known Errors
+If a job fails out of VASP because you didn't use the correct input parameters and/or VASP
+compilation, custodian will report errors that do not make any sense. Use a simple bash
+submission script to figure out the error. 
