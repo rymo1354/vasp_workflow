@@ -4,12 +4,12 @@
 # based on NPAR and KPAR what type (NEB,Dimer,Standard) to run and sets up
 # a submission script and runs it
 
-from jinja2 import Environment, FileSystemLoader
-from Classes_Pymatgen import *
-from pymatgen.io.vasp.outputs import *
-from Helpers import *
 import sys
 import os
+from jinja2 import Environment, FileSystemLoader
+from pymatgen.io.vasp.outputs import *
+from Classes_Pymatgen import *
+from Helpers import *
 import shutil
 import fnmatch
 import cfg
@@ -201,7 +201,9 @@ def get_queue(computer, jobtype, time, nodes):
 
 def get_template(computer, jobtype, special=None):
     if special == 'multi':
-        return (os.environ["VASP_TEMPLATE_DIR"], 'VASP.multistep.jinja2.py')
+        #return (os.environ["VASP_TEMPLATE_DIR"], 'VASP.multistep.jinja2.py')
+        template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'jinja_templates')
+        return (template_path, 'VASP.multistep_include_ncl.jinja2.py')
     if special == 'encut':
         return (os.environ["VASP_TEMPLATE_DIR"], 'VASP.encut.sh.jinja2')
     if special == 'kpoints':

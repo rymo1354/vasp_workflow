@@ -20,6 +20,8 @@ from pymatgen.io.vasp.inputs import Kpoints
 from pymatgen.io.vasp.sets import get_structure_from_prev_run
 from pymatgen.io.vasp.sets import batch_write_input
 from yaml.scanner import ScannerError
+import tempfile
+import shutil
 
 
 class LoadYaml:
@@ -422,6 +424,52 @@ class WriteVaspFiles:
             all_steps += step_array
         return all_steps
 
+    def rewrite_magmom(self, incar_path, magmoms):
+        string = 'MAGMOM = '
+        for m in magmoms:
+            if m == 0:
+                string += '3*0 '
+            else:
+                string += '0 0 %s ' % str(m) # Currently only works for SAXIS = 0 0 1, which is the default
+        return string + '\n'
+
+    def replace_string(self, file_name, pattern, string):
+        t = tempfile.NamedTemporaryFile(mode="r+")
+        i = open(file_name, 'r')
+        for line in i:
+            t.write(string if pattern in line else line)
+        i.close()
+        t.seek(0)
+        o = open(file_name, 'w')
+        for line in t:
+            o.write(line)
+        t.close()
+
+    def insert_string(self, file_name, string, index=3):
+        f = open(file_name, "r")
+        contents = f.readlines()
+        f.close()
+
+        contents.insert(index, string)
+
+        f = open(file_name, "w")
+        contents = "".join(contents)
+        f.write(contents)
+        f.close()
+
+    def remove_line(self, file_name, pattern):
+        t = tempfile.NamedTemporaryFile(mode="r+")
+        i = open(file_name, 'r')
+        for line in i:
+            if not pattern in line:
+                t.write(line)
+        i.close()
+        t.seek(0)
+        o = open(file_name, 'w')
+        for line in t:
+            o.write(line)
+        t.close()
+
     def write_vasp_inputs(self):
         if self.calculation_dict['Type'] == 'bulk':
             calc = 'bulk'
@@ -466,6 +514,18 @@ class WriteVaspFiles:
                                 for line in self.format_convergence_file(write_structure):
                                     f.write("%s\n" % line)
                                 f.close()
+
+                            if 'LSORBIT' in user_incar_settings or 'LNONCOLLINEAR' in user_incar_settings:
+                                incar_file_path = os.path.join(calculation_type_dir_path, 'INCAR')
+                                convergence_file_path = os.path.join(calculation_type_dir_path, 'CONVERGENCE')
+                                rewrite_line = self.rewrite_magmom(incar_file_path, write_structure.site_properties['magmom'])
+                                self.insert_string(convergence_file_path, rewrite_line)
+                                self.remove_line(incar_file_path, 'MAGMOM')
+                                #self.replace_string(incar_file_path, 'MAGMOM', rewrite_line + '\n')
+
+                            if user_incar_settings['LUSE_VDW'] == True: # Van der Waals kernel needed
+                                file_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+                                shutil.copyfile(os.path.join(file_path, 'extra_vasp_files/vdw_kernel.bindat'), os.path.join(calculation_type_dir_path, 'vdw_kernel.bindat'))
 
                         else:
                             print('Not valid structure type')
