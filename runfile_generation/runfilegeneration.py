@@ -516,16 +516,18 @@ class WriteVaspFiles:
                                 f.close()
 
                             if 'LSORBIT' in user_incar_settings or 'LNONCOLLINEAR' in user_incar_settings:
-                                incar_file_path = os.path.join(calculation_type_dir_path, 'INCAR')
-                                convergence_file_path = os.path.join(calculation_type_dir_path, 'CONVERGENCE')
-                                rewrite_line = self.rewrite_magmom(incar_file_path, write_structure.site_properties['magmom'])
-                                self.insert_string(convergence_file_path, rewrite_line)
-                                self.remove_line(incar_file_path, 'MAGMOM')
-                                #self.replace_string(incar_file_path, 'MAGMOM', rewrite_line + '\n')
+                                if user_incar_settings['LSORBIT'] == True or user_incar_settings['LNONCOLLINEAR'] == True:
+                                    incar_file_path = os.path.join(calculation_type_dir_path, 'INCAR')
+                                    convergence_file_path = os.path.join(calculation_type_dir_path, 'CONVERGENCE')
+                                    rewrite_line = self.rewrite_magmom(incar_file_path, write_structure.site_properties['magmom'])
+                                    self.insert_string(convergence_file_path, rewrite_line)
+                                    self.remove_line(incar_file_path, 'MAGMOM')
+                                    #self.replace_string(incar_file_path, 'MAGMOM', rewrite_line + '\n')
 
-                            if user_incar_settings['LUSE_VDW'] == True: # Van der Waals kernel needed
-                                file_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-                                shutil.copyfile(os.path.join(file_path, 'extra_vasp_files/vdw_kernel.bindat'), os.path.join(calculation_type_dir_path, 'vdw_kernel.bindat'))
+                            if 'LUSE_VDW' in user_incar_settings:
+                                if user_incar_settings['LUSE_VDW'] == True: # Van der Waals kernel needed
+                                    file_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+                                    shutil.copyfile(os.path.join(file_path, 'extra_vasp_files/vdw_kernel.bindat'), os.path.join(calculation_type_dir_path, 'vdw_kernel.bindat'))
 
                         else:
                             print('Not valid structure type')
