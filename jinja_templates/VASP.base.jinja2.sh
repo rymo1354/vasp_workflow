@@ -54,7 +54,7 @@ handlers = [WalltimeHandler({{ time }}*60*60, 15*60), NEBNotTerminating('{{ logn
 handlers = [WalltimeHandler({{ time }}*60*60), UnconvergedErrorHandler()]
 {% endif %}
 
-c = Custodian(handlers, vaspjob, max_errors=10)
+c = Custodian(handlers, vaspjob, max_errors=1000, skip_over_errors=True)
 c.run()
 {% endblock python %}
 "

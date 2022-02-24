@@ -68,6 +68,6 @@ def get_runs(max_steps=100):
         yield job(['{{ mpi }}',{% if mpi != "srun" %} '-np', '{{ tasks }}',{% endif %} vasp], '{{ logname }}', auto_npar=False, settings_override=settings, final=final)
 
 
-c = Custodian(handlers, get_runs(), max_errors=10)
+c = Custodian(handlers, get_runs(), max_errors=1000, skip_over_errors=True)
 c.run()
 {% endblock python %}
