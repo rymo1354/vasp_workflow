@@ -51,7 +51,7 @@ to be performed after each new pull request. Learn more at the Material's Projec
 5. Run `python setup.py` in the `.../vasp_workflow` directory. This should make the
 `rerun_workflow.py`, `generate_vasp_inputs.py`, `create_input_yaml.py` and
 `vasp.py` scripts executable, if `.../vasp_workflow` and `.../vasp_workflow/workflow_scripts`
-are on your path.
+are on your path AND pythonpath.
 
 You should be ready to go! If you're having issues with the setup, please contact me
 at [myemail](mailto:rymo1354@colorado.edu).
